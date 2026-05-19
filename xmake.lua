@@ -15,4 +15,4 @@ target("immortal-zombie")
     add_packages("levilamina")
     set_languages("c++20")
     set_exceptions("none")
-    set_suffixes("", "")
+    
