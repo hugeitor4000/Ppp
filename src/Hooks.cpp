@@ -17,7 +17,6 @@
 
 #include <mc/world/actor/Actor.h>
 #include <mc/world/actor/ActorDamageSource.h>
-#include <mc/world/actor/ActorUniqueID.h>
 #include <mc/world/actor/mob/Mob.h>
 
 using namespace immortal_zombie;
