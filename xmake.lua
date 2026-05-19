@@ -14,5 +14,4 @@ target("immortal-zombie")
     add_includedirs("src")
     add_packages("levilamina")
     set_languages("c++20")
-    set_exceptions("none")
-    
+    set_exceptions("cxx")
