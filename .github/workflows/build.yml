@@ -3,7 +3,7 @@ name: Build immortal-zombie
 on:
   push:
     branches: ["main"]
-  workflow_dispatch:  # también permite lanzarlo a mano desde la app
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,8 +19,8 @@ jobs:
       - name: Update repos
         run: xmake repo -u
 
-      - name: Configure
-        run: xmake f -m release
+      - name: Configure & install packages
+        run: xmake f -m release -y
 
       - name: Build
         run: xmake
