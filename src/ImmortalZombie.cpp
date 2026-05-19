@@ -4,9 +4,9 @@
 #include <ll/api/command/CommandHandle.h>
 #include <ll/api/command/CommandRegistrar.h>
 #include <ll/api/event/EventBus.h>
-#include <ll/api/event/entity/ActorHurtEvent.h>
-#include <ll/api/event/entity/MobDieEvent.h>
-#include <ll/api/event/world/LevelTickEvent.h>
+#include <ll/api/event/ActorHurtEvent.h>
+#include <ll/api/event/MobDieEvent.h>
+#include <ll/api/event/LevelTickEvent.h>
 #include <ll/api/io/LoggerRegistry.h>
 #include <ll/api/mod/RegisterHelper.h>
 #include <ll/api/service/Bedrock.h>
