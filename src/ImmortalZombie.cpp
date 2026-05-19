@@ -17,7 +17,7 @@
 #include <mc/server/commands/CommandPermissionLevel.h>
 #include <mc/world/actor/Actor.h>
 #include <mc/world/actor/ActorType.h>
-#include <mc/world/actor/mob/Mob.h>
+#include <mc/world/actor/Mob.h>
 #include <mc/world/actor/player/Player.h>
 #include <mc/world/level/Level.h>
 #include <mc/world/level/dimension/Dimension.h>
