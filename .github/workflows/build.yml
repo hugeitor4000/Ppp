@@ -26,8 +26,9 @@ jobs:
         run: xmake
 
       - name: Find DLL
-        run: dir /s /b *.dll
-
+        run: Get-ChildItem -Recurse -Filter *.dll | Select-Object FullName
+        shell: pwsh
+        
       - name: Package mod
         run: |
           mkdir output
