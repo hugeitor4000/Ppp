@@ -1,37 +1,41 @@
 #pragma once
 
 #include <ll/api/mod/NativeMod.h>
-#include <ll/api/event/ListenerBase.h>
 #include <mc/world/actor/Actor.h>
 
 #include <atomic>
-#include <memory>
+#include <cstdint>
 
 namespace immortal_zombie {
 
 class ImmortalZombie {
 public:
+    // Constructor público — requerido por LL_REGISTER_MOD
+    ImmortalZombie() = default;
+
     static ImmortalZombie& getInstance();
 
-    ll::mod::NativeMod& getSelf() const;
+    // getSelf() usa NativeMod::current() — no necesita puntero interno
+    ll::mod::NativeMod& getSelf() const {
+        return ll::mod::NativeMod::current();
+    }
 
+    // Lifecycle (requeridos por el concepto Loadable)
     bool load();
     bool enable();
     bool disable();
     bool unload();
 
-    void setImmortalId(ActorUniqueID id);
-    void clearImmortalId();
-    bool hasImmortal() const;
-    bool isImmortal(ActorUniqueID id) const;
-    ActorUniqueID getImmortalId() const;
+    // Zombie tracking
+    void    setImmortalRawId(int64_t rawId);
+    void    clearImmortalId();
+    bool    hasImmortal() const;
+    bool    isImmortal(ActorUniqueID id) const;
+    int64_t getImmortalRawId() const;
 
 private:
-    ImmortalZombie();
-    ~ImmortalZombie();
-
-    struct Impl;
-    std::unique_ptr<Impl> mImpl;
+    std::atomic<bool>    mHasZombie{false};
+    std::atomic<int64_t> mZombieRawId{-1};
 };
 
 } // namespace immortal_zombie
