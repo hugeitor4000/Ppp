@@ -9,7 +9,7 @@ if not has_config("vs_runtime") then
 end
 
 target("immortal-zombie")
-    set_kind("shared")
+    add_rules("@levilamina/modlibrary")
     add_files("src/**.cpp")
     add_includedirs("src")
     add_packages("levilamina")
