@@ -1,17 +1,30 @@
 add_rules("mode.debug", "mode.release", "mode.releasedbg")
 
-add_repositories("liteldev-repo https://github.com/LiteLDev/xmake-repo.git")
+add_repositories("levimc-repo https://github.com/LiteLDev/xmake-repo.git")
 
-add_requires("levilamina")
+option("target_type")
+    set_default("server")
+    set_showmenu(true)
+    set_values("server", "client")
+option_end()
+
+add_requires("levilamina", {configs = {target_type = get_config("target_type")}})
+add_requires("levibuildscript")
 
 if not has_config("vs_runtime") then
     set_runtimes("MD")
 end
 
 target("immortal-zombie")
-    add_rules("@levilamina/modlibrary")
+    add_rules("@levibuildscript/linkrule")
+    add_rules("@levibuildscript/modpacker")
+    add_cxflags("/EHa", "/utf-8", "/W4")
+    add_defines("NOMINMAX", "UNICODE")
+    add_packages("levilamina")
+    set_exceptions("none")
+    set_kind("shared")
+    set_languages("c++20")
+    set_symbols("debug")
+    add_headerfiles("src/**.h")
     add_files("src/**.cpp")
     add_includedirs("src")
-    add_packages("levilamina")
-    set_languages("c++20")
-    set_exceptions("cxx")
