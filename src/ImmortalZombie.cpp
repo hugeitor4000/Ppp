@@ -2,7 +2,6 @@
 
 #include <ll/api/command/CommandHandle.h>
 #include <ll/api/command/CommandRegistrar.h>
-#include <ll/api/mod/NativeMod.h>
 #include <ll/api/mod/RegisterHelper.h>
 #include <ll/api/service/Bedrock.h>
 
@@ -15,56 +14,39 @@
 #include <mc/world/actor/player/Player.h>
 #include <mc/world/level/Level.h>
 
-#include <atomic>
-#include <memory>
-
 namespace immortal_zombie {
 
-// ─── Pimpl ────────────────────────────────────────────────────────────────────
-struct ImmortalZombie::Impl {
-    std::atomic<bool>    hasZombie{false};
-    std::atomic<int64_t> zombieRawId{-1}; // int64_t evita problemas con atomic<ActorUniqueID>
-};
-
-// ─── Singleton como valor (no puntero) ────────────────────────────────────────
-ImmortalZombie sInstance;  // NOLINT
+// Instancia global (valor, no puntero — requerido por LL_REGISTER_MOD)
+ImmortalZombie sInstance; // NOLINT
 
 ImmortalZombie& ImmortalZombie::getInstance() { return sInstance; }
-ImmortalZombie::ImmortalZombie()  : mImpl(std::make_unique<Impl>()) {}
-ImmortalZombie::~ImmortalZombie() = default;
 
-// NativeMod::current() es el mod activo en el thread actual — no necesitamos
-// guardar un puntero manualmente.
-ll::mod::NativeMod& ImmortalZombie::getSelf() const {
-    return *ll::mod::NativeMod::current();
+// ── Zombie tracking ──────────────────────────────────────────────────────────
+void ImmortalZombie::setImmortalRawId(int64_t rawId) {
+    mZombieRawId.store(rawId);
+    mHasZombie.store(true);
 }
-
-// ─── Gestión del zombie ────────────────────────────────────────────────────────
-void    ImmortalZombie::setImmortalRawId(int64_t rawId) {
-    mImpl->zombieRawId.store(rawId);
-    mImpl->hasZombie.store(true);
+void ImmortalZombie::clearImmortalId() {
+    mHasZombie.store(false);
+    mZombieRawId.store(-1);
 }
-void    ImmortalZombie::clearImmortalId() {
-    mImpl->hasZombie.store(false);
-    mImpl->zombieRawId.store(-1);
-}
-bool    ImmortalZombie::hasImmortal() const      { return mImpl->hasZombie.load(); }
-int64_t ImmortalZombie::getImmortalRawId() const { return mImpl->zombieRawId.load(); }
+bool    ImmortalZombie::hasImmortal() const      { return mHasZombie.load(); }
+int64_t ImmortalZombie::getImmortalRawId() const { return mZombieRawId.load(); }
 bool    ImmortalZombie::isImmortal(ActorUniqueID id) const {
-    return mImpl->hasZombie.load() && mImpl->zombieRawId.load() == id.rawID;
+    return mHasZombie.load() && mZombieRawId.load() == id.rawID;
 }
 
-// ─── Lifecycle ────────────────────────────────────────────────────────────────
+// ── Lifecycle ────────────────────────────────────────────────────────────────
 bool ImmortalZombie::load() {
     getSelf().getLogger().info("ImmortalZombie cargado.");
     return true;
 }
 
 bool ImmortalZombie::enable() {
-    auto& mod = getSelf();
-    auto& log = mod.getLogger();
+    auto& log = getSelf().getLogger();
 
-    auto& cmd = ll::command::CommandRegistrar::getInstance(mod)
+    // getInstance(false) = server-side  (según la API docs)
+    auto& cmd = ll::command::CommandRegistrar::getInstance(false)
                     .getOrCreateCommand(
                         "immortalzombie",
                         "Controla el zombie inmortal.",
@@ -81,21 +63,18 @@ bool ImmortalZombie::enable() {
             }
             auto* player = static_cast<Player*>(entity); // NOLINT
 
-            // Buscar objetivo: primero getTarget() (mob target), luego nada
+            // Obtener objetivo actual del jugador (Mob::getTarget)
             Actor* target = static_cast<Mob*>(player)->getTarget(); // NOLINT
-
             if (!target) {
-                output.error("Ataca a un zombie primero para seleccionarlo.");
+                output.error("Ataca a un zombie para seleccionarlo como objetivo.");
                 return;
             }
 
             ActorType type = target->getEntityTypeId();
-            bool isZombie  = (type == ActorType::Zombie)
-                          || (type == ActorType::ZombieVillager)
-                          || (type == ActorType::Husk)
-                          || (type == ActorType::Drowned);
-
-            if (!isZombie) {
+            if (type != ActorType::Zombie &&
+                type != ActorType::ZombieVillager &&
+                type != ActorType::Husk &&
+                type != ActorType::Drowned) {
                 output.error("El objetivo no es un zombie.");
                 return;
             }
@@ -150,7 +129,7 @@ bool ImmortalZombie::enable() {
         }
     );
 
-    log.info("ImmortalZombie activado. Ataca un zombie y usa /immortalzombie set.");
+    log.info("ImmortalZombie activado. Ataca un zombie y usa /immortalzombie set");
     return true;
 }
 
