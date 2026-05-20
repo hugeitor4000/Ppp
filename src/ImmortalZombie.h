@@ -17,9 +17,8 @@ public:
 
     // getSelf() usa NativeMod::current() — no necesita puntero interno
     ll::mod::NativeMod& getSelf() const {
-        return ll::mod::NativeMod::current();
+    return *ll::mod::NativeMod::current();
     }
-
     // Lifecycle (requeridos por el concepto Loadable)
     bool load();
     bool enable();
