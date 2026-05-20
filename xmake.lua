@@ -3,7 +3,7 @@ add_rules("mode.debug", "mode.release", "mode.releasedbg")
 add_repositories("levimc-repo https://github.com/LiteLDev/xmake-repo.git")
 
 option("target_type")
-    set_default("server")
+    set_default("client")
     set_showmenu(true)
     set_values("server", "client")
 option_end()
