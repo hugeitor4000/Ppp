@@ -2,6 +2,7 @@
 
 #include <ll/api/command/CommandHandle.h>
 #include <ll/api/command/CommandRegistrar.h>
+#include <ll/api/mod/NativeMod.h>
 #include <ll/api/mod/RegisterHelper.h>
 #include <ll/api/service/Bedrock.h>
 
@@ -19,56 +20,58 @@
 
 namespace immortal_zombie {
 
+// ─── Pimpl ────────────────────────────────────────────────────────────────────
 struct ImmortalZombie::Impl {
-    ll::mod::NativeMod*        self = nullptr;
-    std::atomic<bool>          hasZombie{false};
-    std::atomic<ActorUniqueID> zombieId{ActorUniqueID::INVALID_ID};
+    std::atomic<bool>    hasZombie{false};
+    std::atomic<int64_t> zombieRawId{-1}; // int64_t evita problemas con atomic<ActorUniqueID>
 };
 
-static ImmortalZombie* sInstance = nullptr;
+// ─── Singleton como valor (no puntero) ────────────────────────────────────────
+ImmortalZombie sInstance;  // NOLINT
 
-ImmortalZombie& ImmortalZombie::getInstance() { return *sInstance; }
+ImmortalZombie& ImmortalZombie::getInstance() { return sInstance; }
 ImmortalZombie::ImmortalZombie()  : mImpl(std::make_unique<Impl>()) {}
 ImmortalZombie::~ImmortalZombie() = default;
 
-ll::mod::NativeMod& ImmortalZombie::getSelf() const { return *mImpl->self; }
+// NativeMod::current() es el mod activo en el thread actual — no necesitamos
+// guardar un puntero manualmente.
+ll::mod::NativeMod& ImmortalZombie::getSelf() const {
+    return *ll::mod::NativeMod::current();
+}
 
-void ImmortalZombie::setImmortalId(ActorUniqueID id) {
-    mImpl->zombieId.store(id);
+// ─── Gestión del zombie ────────────────────────────────────────────────────────
+void    ImmortalZombie::setImmortalRawId(int64_t rawId) {
+    mImpl->zombieRawId.store(rawId);
     mImpl->hasZombie.store(true);
 }
-void ImmortalZombie::clearImmortalId() {
+void    ImmortalZombie::clearImmortalId() {
     mImpl->hasZombie.store(false);
-    mImpl->zombieId.store(ActorUniqueID::INVALID_ID);
+    mImpl->zombieRawId.store(-1);
 }
-bool          ImmortalZombie::hasImmortal() const    { return mImpl->hasZombie.load(); }
-ActorUniqueID ImmortalZombie::getImmortalId() const  { return mImpl->zombieId.load(); }
-bool ImmortalZombie::isImmortal(ActorUniqueID id) const {
-    return mImpl->hasZombie.load() && mImpl->zombieId.load() == id;
+bool    ImmortalZombie::hasImmortal() const      { return mImpl->hasZombie.load(); }
+int64_t ImmortalZombie::getImmortalRawId() const { return mImpl->zombieRawId.load(); }
+bool    ImmortalZombie::isImmortal(ActorUniqueID id) const {
+    return mImpl->hasZombie.load() && mImpl->zombieRawId.load() == id.rawID;
 }
 
+// ─── Lifecycle ────────────────────────────────────────────────────────────────
 bool ImmortalZombie::load() {
-    getSelf().getLogger().info("ImmortalZombie loaded.");
+    getSelf().getLogger().info("ImmortalZombie cargado.");
     return true;
 }
 
 bool ImmortalZombie::enable() {
-    auto& log = getSelf().getLogger();
+    auto& mod = getSelf();
+    auto& log = mod.getLogger();
 
-    auto commandRegistry = ll::service::getCommandRegistry();
-    if (!commandRegistry) {
-        log.error("Failed to get command registry.");
-        return false;
-    }
-
-    auto& cmd = ll::command::CommandRegistrar::getInstance()
+    auto& cmd = ll::command::CommandRegistrar::getInstance(mod)
                     .getOrCreateCommand(
                         "immortalzombie",
-                        "Control the immortal zombie.",
+                        "Controla el zombie inmortal.",
                         CommandPermissionLevel::Admin
                     );
 
-    // /immortalzombie set
+    // /immortalzombie set ─────────────────────────────────────────────────────
     cmd.overload().text("set").execute(
         [](CommandOrigin const& origin, CommandOutput& output) {
             auto* entity = origin.getEntity();
@@ -77,33 +80,36 @@ bool ImmortalZombie::enable() {
                 return;
             }
             auto* player = static_cast<Player*>(entity); // NOLINT
-            Actor* target = player->getAttackTarget();
+
+            // Buscar objetivo: primero getTarget() (mob target), luego nada
+            Actor* target = static_cast<Mob*>(player)->getTarget(); // NOLINT
 
             if (!target) {
-                output.error("Mira a un zombie o ponte a menos de 8 bloques.");
+                output.error("Ataca a un zombie primero para seleccionarlo.");
                 return;
             }
 
             ActorType type = target->getEntityTypeId();
-            if (type != ActorType::Zombie       &&
-                type != ActorType::ZombieVillager &&
-                type != ActorType::Husk          &&
-                type != ActorType::Drowned       &&
-                type != ActorType::ZombifiedPiglin) {
+            bool isZombie  = (type == ActorType::Zombie)
+                          || (type == ActorType::ZombieVillager)
+                          || (type == ActorType::Husk)
+                          || (type == ActorType::Drowned);
+
+            if (!isZombie) {
                 output.error("El objetivo no es un zombie.");
                 return;
             }
 
-            ActorUniqueID uid = target->getOrCreateUniqueID();
+            int64_t rawId = target->getOrCreateUniqueID().rawID;
             target->setPersistent();
-            ImmortalZombie::getInstance().setImmortalId(uid);
-            output.success("Zombie UID {} ahora es INMORTAL.", uid.rawID);
+            ImmortalZombie::getInstance().setImmortalRawId(rawId);
+            output.success("Zombie {} ahora es INMORTAL.", rawId);
             ImmortalZombie::getInstance().getSelf().getLogger()
-                .info("Inmortal zombie registrado: UID {}", uid.rawID);
+                .info("Zombie inmortal registrado: {}", rawId);
         }
     );
 
-    // /immortalzombie clear
+    // /immortalzombie clear ───────────────────────────────────────────────────
     cmd.overload().text("clear").execute(
         [](CommandOrigin const&, CommandOutput& output) {
             auto& mod = ImmortalZombie::getInstance();
@@ -111,13 +117,13 @@ bool ImmortalZombie::enable() {
                 output.error("No hay zombie inmortal activo.");
                 return;
             }
-            auto uid = mod.getImmortalId();
+            int64_t id = mod.getImmortalRawId();
             mod.clearImmortalId();
-            output.success("Zombie UID {} ya no es inmortal.", uid.rawID);
+            output.success("Zombie {} ya no es inmortal.", id);
         }
     );
 
-    // /immortalzombie info
+    // /immortalzombie info ────────────────────────────────────────────────────
     cmd.overload().text("info").execute(
         [](CommandOrigin const&, CommandOutput& output) {
             auto& mod = ImmortalZombie::getInstance();
@@ -125,22 +131,26 @@ bool ImmortalZombie::enable() {
                 output.success("No hay zombie inmortal activo.");
                 return;
             }
-            auto  uid   = mod.getImmortalId();
-            auto* level = ll::service::getLevel();
-            Actor* actor = level ? level->fetchEntity(uid, false) : nullptr;
-            if (!actor) {
-                output.success("Zombie UID {} rastreado (chunk no cargado).", uid.rawID);
-            } else {
-                auto pos = actor->getPosition();
-                output.success(
-                    "Zombie UID {} — pos ({:.1f},{:.1f},{:.1f})",
-                    uid.rawID, pos.x, pos.y, pos.z
-                );
+            int64_t rawId = mod.getImmortalRawId();
+            ActorUniqueID uid;
+            uid.rawID = rawId;
+
+            if (auto levelRef = ll::service::getLevel()) {
+                Actor* actor = levelRef->fetchEntity(uid, false);
+                if (actor) {
+                    auto pos = actor->getPosition();
+                    output.success(
+                        "Zombie {} — pos ({:.1f},{:.1f},{:.1f})",
+                        rawId, pos.x, pos.y, pos.z
+                    );
+                    return;
+                }
             }
+            output.success("Zombie {} rastreado (chunk no cargado).", rawId);
         }
     );
 
-    log.info("ImmortalZombie activado. Usa /immortalzombie set mirando un zombie.");
+    log.info("ImmortalZombie activado. Ataca un zombie y usa /immortalzombie set.");
     return true;
 }
 
