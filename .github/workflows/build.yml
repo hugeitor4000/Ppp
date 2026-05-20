@@ -20,13 +20,23 @@ jobs:
         run: xmake repo -u
 
       - name: Configure & install packages
-        run: xmake f -m release -y
+        run: xmake f -m release -y --target_type=server
 
       - name: Build
         run: xmake
 
+      - name: Find DLL
+        run: dir /s /b *.dll
+
+      - name: Package mod
+        run: |
+          mkdir output
+          for /r %%f in (*.dll) do copy "%%f" output\immortal-zombie.dll
+          copy manifest.json output\manifest.json
+        shell: cmd
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: immortal-zombie-dll
-          path: "**/*.dll"
+          name: immortal-zombie
+          path: output/
